@@ -22,15 +22,11 @@ st.markdown("""
     function sendDataToStreamlit() {
         const angleDataJson = JSON.stringify(window.angleData);
         const angleDataInput = document.createElement("input");
-        angleDataInput.type = "hidden";
+        angleDataInput.type = "text";
         angleDataInput.name = "angle_data";
         angleDataInput.value = angleDataJson;
         document.forms[0].appendChild(angleDataInput);
     }
-
-    document.addEventListener('DOMContentLoaded', function() {
-        sendDataToStreamlit();
-    });
 </script>
 """, unsafe_allow_html=True)
 
@@ -41,17 +37,20 @@ st.title('Golf Putt Analyzer AI')
 st.header("Step 1: Lay Your Phone Flat on the Green")
 st.write("Place your phone flat on the green with the camera facing down. Ensure the phone is still, and we'll automatically capture the angle data.")
 
-# Hidden input field that the JavaScript modifies
-angle_data_json = st.text_input("Angle Data (hidden)", "", type="hidden")
-
-# Parse JSON angle data if available
-if angle_data_json:
-    try:
-        st.session_state['angle_data'] = json.loads(angle_data_json)
-        st.success("Angle data collected successfully!")
-        st.write("Collected Angle Data:", st.session_state['angle_data'])
-    except json.JSONDecodeError:
-        st.error("Failed to parse angle data. Please try again.")
+# Button to trigger the sending of data from JavaScript
+if st.button('Collect Angle Data'):
+    st.write("Angle Data collected:")
+    angle_data_json = st.experimental_get_query_params().get('angle_data', [None])[0]
+    
+    if angle_data_json:
+        try:
+            st.session_state['angle_data'] = json.loads(angle_data_json)
+            st.success("Angle data collected successfully!")
+            st.write("Collected Angle Data:", st.session_state['angle_data'])
+        except json.JSONDecodeError:
+            st.error("Failed to parse angle data. Please try again.")
+    else:
+        st.error("No angle data received. Please try again.")
 
 # Step 2: Tilt the phone and capture the image
 st.header("Step 2: Tilt Your Phone Towards the Hole")
