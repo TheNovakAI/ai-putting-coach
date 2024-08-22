@@ -6,40 +6,55 @@ import json
 
 # Initialize session state for angle data
 if 'angle_data' not in st.session_state:
-    st.session_state['angle_data'] = None
+    st.session_state['angle_data'] = {}
 
-# JavaScript to collect device orientation data
+# JavaScript to collect device orientation data and send it to Streamlit
 st.markdown("""
 <script>
-    function sendAngleData(alpha, beta, gamma) {
-        var xhr = new XMLHttpRequest();
-        xhr.open("POST", "/angle_data", true);
-        xhr.setRequestHeader("Content-Type", "application/json");
-        xhr.send(JSON.stringify({alpha: alpha, beta: beta, gamma: gamma}));
+    let angleData = {alpha: 0, beta: 0, gamma: 0};
+
+    function sendAngleData() {
+        const xhr = new XMLHttpRequest();
+        xhr.open("POST", "http://localhost:8501/angle_data", true);
+        xhr.setRequestHeader("Content-Type", "application/json;charset=UTF-8");
+        xhr.send(JSON.stringify(angleData));
     }
 
     if (window.DeviceOrientationEvent) {
         window.addEventListener('deviceorientation', function(event) {
-            var alpha = event.alpha;
-            var beta = event.beta;
-            var gamma = event.gamma;
+            angleData.alpha = event.alpha; // Rotation around Z axis (0 to 360 degrees)
+            angleData.beta = event.beta;   // Rotation around X axis (-180 to 180 degrees)
+            angleData.gamma = event.gamma; // Rotation around Y axis (-90 to 90 degrees)
 
             // Check if the device is flat
-            if (Math.abs(beta) < 5 && Math.abs(gamma) < 5) {
-                sendAngleData(alpha, beta, gamma);
+            if (Math.abs(angleData.beta) < 5 && Math.abs(angleData.gamma) < 5) {
+                sendAngleData();
             }
         }, true);
     }
 </script>
 """, unsafe_allow_html=True)
 
-# Endpoint to receive angle data
-def receive_angle_data():
-    angle_data = json.loads(st.experimental_get_query_params().get('angle_data', '{}'))
-    st.session_state['angle_data'] = angle_data
+# Endpoint to receive angle data from JavaScript
+if st._is_running_with_streamlit:
+    from streamlit.server.server import Server
 
-# Call the function to process the angle data if available
-receive_angle_data()
+    @st.experimental_singleton
+    def get_server():
+        return Server.get_current()._session_mgr
+
+    # Get the session manager instance
+    server = get_server()
+
+    # Hook into the WebSocketHandler to receive the POST request
+    server._websocket_handler_class._overrides['angle_data'] = lambda handler, message: handler._callback(
+        json.loads(message['data'])
+    )
+
+    def handle_angle_data(data):
+        st.session_state['angle_data'] = data
+
+    server._websocket_handler_class._overrides['angle_data'] = handle_angle_data
 
 # Streamlit UI
 st.title('Golf Putt Analyzer AI')
@@ -49,7 +64,7 @@ st.header("Step 1: Lay Your Phone Flat on the Green")
 st.write("Place your phone flat on the green with the camera facing down. Ensure the phone is still, and we'll automatically capture the angle data.")
 
 if st.button('Collect Angle Data'):
-    if st.session_state['angle_data'] is not None:
+    if st.session_state['angle_data']:
         st.success("Angle data collected successfully!")
         st.write("Collected Angle Data:", st.session_state['angle_data'])
     else:
