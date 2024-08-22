@@ -8,7 +8,7 @@ import json
 if 'angle_data' not in st.session_state:
     st.session_state['angle_data'] = None
 
-# JavaScript to collect device orientation data
+# JavaScript to collect device orientation data and pass it to Streamlit
 st.markdown("""
 <script>
     window.angleData = {alpha: 0, beta: 0, gamma: 0};
@@ -27,6 +27,10 @@ st.markdown("""
         angleDataInput.value = angleDataJson;
         document.forms[0].appendChild(angleDataInput);
     }
+
+    document.addEventListener('DOMContentLoaded', function() {
+        sendDataToStreamlit();
+    });
 </script>
 """, unsafe_allow_html=True)
 
@@ -37,14 +41,17 @@ st.title('Golf Putt Analyzer AI')
 st.header("Step 1: Lay Your Phone Flat on the Green")
 st.write("Place your phone flat on the green with the camera facing down. Ensure the phone is still, and we'll automatically capture the angle data.")
 
-if st.button('Collect Angle Data', on_click=lambda: st.session_state.update({'angle_data': st.experimental_get_query_params().get('angle_data')})):
-    st.write("Angle Data collected:")
-    st.json(st.session_state['angle_data'])
+# Hidden input field that the JavaScript modifies
+angle_data_json = st.text_input("Angle Data (hidden)", "", type="hidden")
 
-    if st.session_state['angle_data']:
+# Parse JSON angle data if available
+if angle_data_json:
+    try:
+        st.session_state['angle_data'] = json.loads(angle_data_json)
         st.success("Angle data collected successfully!")
-    else:
-        st.error("Failed to collect angle data. Please try again.")
+        st.write("Collected Angle Data:", st.session_state['angle_data'])
+    except json.JSONDecodeError:
+        st.error("Failed to parse angle data. Please try again.")
 
 # Step 2: Tilt the phone and capture the image
 st.header("Step 2: Tilt Your Phone Towards the Hole")
