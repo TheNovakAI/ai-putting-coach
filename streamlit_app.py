@@ -6,55 +6,29 @@ import json
 
 # Initialize session state for angle data
 if 'angle_data' not in st.session_state:
-    st.session_state['angle_data'] = {}
+    st.session_state['angle_data'] = None
 
-# JavaScript to collect device orientation data and send it to Streamlit
+# JavaScript to collect device orientation data
 st.markdown("""
 <script>
-    let angleData = {alpha: 0, beta: 0, gamma: 0};
+    window.angleData = {alpha: 0, beta: 0, gamma: 0};
 
-    function sendAngleData() {
-        const xhr = new XMLHttpRequest();
-        xhr.open("POST", "http://localhost:8501/angle_data", true);
-        xhr.setRequestHeader("Content-Type", "application/json;charset=UTF-8");
-        xhr.send(JSON.stringify(angleData));
-    }
+    window.addEventListener('deviceorientation', function(event) {
+        window.angleData.alpha = event.alpha;
+        window.angleData.beta = event.beta;
+        window.angleData.gamma = event.gamma;
+    }, true);
 
-    if (window.DeviceOrientationEvent) {
-        window.addEventListener('deviceorientation', function(event) {
-            angleData.alpha = event.alpha; // Rotation around Z axis (0 to 360 degrees)
-            angleData.beta = event.beta;   // Rotation around X axis (-180 to 180 degrees)
-            angleData.gamma = event.gamma; // Rotation around Y axis (-90 to 90 degrees)
-
-            // Check if the device is flat
-            if (Math.abs(angleData.beta) < 5 && Math.abs(angleData.gamma) < 5) {
-                sendAngleData();
-            }
-        }, true);
+    function sendDataToStreamlit() {
+        const angleDataJson = JSON.stringify(window.angleData);
+        const angleDataInput = document.createElement("input");
+        angleDataInput.type = "hidden";
+        angleDataInput.name = "angle_data";
+        angleDataInput.value = angleDataJson;
+        document.forms[0].appendChild(angleDataInput);
     }
 </script>
 """, unsafe_allow_html=True)
-
-# Endpoint to receive angle data from JavaScript
-if st._is_running_with_streamlit:
-    from streamlit.server.server import Server
-
-    @st.experimental_singleton
-    def get_server():
-        return Server.get_current()._session_mgr
-
-    # Get the session manager instance
-    server = get_server()
-
-    # Hook into the WebSocketHandler to receive the POST request
-    server._websocket_handler_class._overrides['angle_data'] = lambda handler, message: handler._callback(
-        json.loads(message['data'])
-    )
-
-    def handle_angle_data(data):
-        st.session_state['angle_data'] = data
-
-    server._websocket_handler_class._overrides['angle_data'] = handle_angle_data
 
 # Streamlit UI
 st.title('Golf Putt Analyzer AI')
@@ -63,12 +37,14 @@ st.title('Golf Putt Analyzer AI')
 st.header("Step 1: Lay Your Phone Flat on the Green")
 st.write("Place your phone flat on the green with the camera facing down. Ensure the phone is still, and we'll automatically capture the angle data.")
 
-if st.button('Collect Angle Data'):
+if st.button('Collect Angle Data', on_click=lambda: st.session_state.update({'angle_data': st.experimental_get_query_params().get('angle_data')})):
+    st.write("Angle Data collected:")
+    st.json(st.session_state['angle_data'])
+
     if st.session_state['angle_data']:
         st.success("Angle data collected successfully!")
-        st.write("Collected Angle Data:", st.session_state['angle_data'])
     else:
-        st.error("Please ensure your phone is laying flat and still.")
+        st.error("Failed to collect angle data. Please try again.")
 
 # Step 2: Tilt the phone and capture the image
 st.header("Step 2: Tilt Your Phone Towards the Hole")
